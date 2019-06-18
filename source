@@ -1,0 +1,853 @@
+Option Explicit
+'Database Global variables
+Dim strConnectionString As String
+Dim adoCommand As ADODB.Command
+Dim adoCommand1 As ADODB.Command
+Dim adoCommand2 As ADODB.Command
+Dim adoRecordSet As ADODB.Recordset
+Dim adoRecordSet1 As ADODB.Recordset
+Dim adoRecordSet2 As ADODB.Recordset
+Dim adoConnection As New ADODB.Connection
+Dim fldcolumn As ADODB.Field
+
+'Excel Global variables
+Dim ExcelApp As Excel.Application
+Dim obook As Excel.Workbook
+Dim bbook As Excel.Workbook
+Dim rbook As Excel.Workbook
+Dim tbook As Excel.Workbook
+Dim lkpSheet As Excel.Worksheet
+
+'Misc Global variables
+Dim ColorIndex As Integer
+Dim FieldsList(100) As String, TableList(100) As String
+Dim Query1 As String, Query2 As String
+Dim Qualifier As String, SSid As String, Table As String
+Dim SSid1 As String, SSid2 As String
+Dim maxColumnCount As Integer, rowsPath1 As Long, rowsPath2 As Long, selectFieldCount As Integer, colsPath1 As Integer, colsPath2 As Integer
+Dim ErrText As String, OtherError As Boolean
+
+Dim osheet As Excel.Worksheet
+Dim rsheet As Excel.Worksheet
+Dim rsheet1 As Excel.Worksheet
+Dim tsheet As Excel.Worksheet
+
+Dim path1Table(65536, 100) As Variant, path2Table(15757, 100) As Variant, resultTable(15757, 100) As Variant
+Dim path1ColHead(100)  As String, path2ColHead(100) As String
+Dim ActiveForm As String
+
+Public ErrMsg As Boolean, ExtractDone As Boolean
+Public maxRows As Long
+
+    Public Sub ExcelCmdButn1_Click()
+            
+        If MsgBox("Welcome to RTE Compare Tool" & vbNewLine & vbNewLine & "Please make sure Excel Workbooks (if any) are not opened in below names." & vbNewLine & vbNewLine & "*** Base_Dump.xls ***" & vbNewLine & "*** Compare_Dump.xls ***" & vbNewLine & "*** Comparison_Result.xls ***" & vbNewLine & vbNewLine & "If any opened Workbooks (of above name) will be closed automatically now.", vbOKCancel, "Welcome!") = vbCancel Then
+            Call ExitForms
+        Else
+            ColorIndex = 34
+            maxRows = Application.Rows.Count
+            Call cmdResetAll_Click
+            Call AssignSheets
+            ActiveForm = "FormInitial"
+            FormInitial.Show vbModeless
+        End If
+
+    End Sub
+    
+    Sub cmdResetAll_Click()
+    
+        Dim wsheet As Excel.Worksheet
+           
+        Call AssignSheets
+        For Each wsheet In obook.Worksheets
+            If Trim(wsheet.Name) <> "Lookup Sheet" And Trim(wsheet.Name) <> "Tool Page" Then
+               DeleteSheet (wsheet.Name)
+            End If
+        Next wsheet
+        Call CloseWorkbooks
+        Call Module1.ExitForms
+                
+    End Sub
+    
+    Public Sub ExitForms()
+    
+        On Error GoTo errorhandleref:
+        Unload FormInitial
+        Unload FormMain
+        Unload FormLogin
+        Application.StatusBar = "Welcome to RTE Table Comparison Tool!"
+        Exit Sub
+errorhandleref:
+        Resume Next
+        
+    End Sub
+    
+    Public Sub ExitLogin()
+    
+        On Error GoTo errorhandleref:
+        Unload FormLogin
+        Exit Sub
+errorhandleref:
+        Resume Next
+        
+    End Sub
+    
+    Public Sub ExcelReset()
+    
+        If MsgBox("All Excel Workbooks (if any) created with this Tool will be closed..", vbOKCancel, "Closing Workbooks!") = vbCancel Then
+            Exit Sub
+        Else
+            Call cmdResetAll_Click
+        End If
+    
+    End Sub
+    Sub help()
+            ActiveSheet.Shapes("Object 1").Select
+            Selection.Verb Verb:=xlPrimary
+    End Sub
+    
+    Public Sub ExitExcel()
+    
+        On Error Resume Next
+        MsgBox "The Tool will be closed now.. Thank You and Visit Again!!", vbOKOnly, "Thank You!"
+        ThisWorkbook.Save
+        ThisWorkbook.Close
+        
+    End Sub
+    
+    Public Sub CloseWorkbooks()
+    
+        'Close Opened Workbooks
+        On Error Resume Next
+        Workbooks("Base_Dump.xls").Close
+        Workbooks("Compare_Dump.xls").Close
+        Workbooks("Comparison_Result.xls").Close
+        
+    End Sub
+    
+    Private Sub DeleteSheet(sheet As String)
+    
+        'Deletes sheet from excel
+        On Error Resume Next
+        Application.DisplayAlerts = False
+        Sheets(sheet).Delete
+        Application.DisplayAlerts = True
+        
+    End Sub
+    
+    Public Sub AssignSheets()
+    
+        Set obook = ThisWorkbook
+        obook.Activate
+        Set lkpSheet = obook.Worksheets("Lookup Sheet")
+        
+    End Sub
+        
+    Public Function FindSSid(query As String)
+            
+        Dim ctr1, ctr2 As Long
+        Dim SSid As String
+        
+        Call AssignSheets
+        ctr1 = lkpSheet.Cells(maxRows, 1).End(xlUp).Row
+        FindSSid = "False"
+        For ctr2 = 6 To ctr1
+            If query = Trim(lkpSheet.Cells(ctr2, 1).Value) And Trim(lkpSheet.Cells(ctr2, 2).Value) <> "" Then
+                FindSSid = Trim(lkpSheet.Cells(ctr2, 2).Value)
+                Exit For
+            End If
+        Next ctr2
+        
+    End Function
+            
+    Public Function FindQualifier(region As String)
+                        
+        Dim ctr1, ctr2 As Long
+        Dim Qualifier As String
+        
+        Call AssignSheets
+        ctr1 = lkpSheet.Cells(maxRows, 1).End(xlUp).Row
+        FindQualifier = "False"
+        For ctr2 = 6 To ctr1
+            If region = Trim(lkpSheet.Cells(ctr2, 1).Value) And Trim(lkpSheet.Cells(ctr2, 3).Value) <> "" Then
+                FindQualifier = Trim(lkpSheet.Cells(ctr2, 3).Value)
+                Exit For
+            End If
+        Next ctr2
+        
+    End Function
+            
+    Public Sub RunExtractQuery(Table1 As String, SSid1 As String, Qualifier1 As String)
+        
+        Application.ScreenUpdating = False
+        Application.StatusBar = "Extracting " & Table1
+        Call fetchPath1(Table1, SSid1, Qualifier1)
+        Application.ScreenUpdating = True
+
+    End Sub
+    Public Sub Connection_Open(SSid As String)
+    
+        ErrMsg = True
+        If adoConnection.State = adStateOpen Then
+            adoConnection.Close
+        End If
+        strConnectionString = "Provider=MSDASQL.1;Persist Security Info=False;User ID=" & FormLogin.TxtUserID.Text & ";Password=" _
+        & FormLogin.TxtUserPassword.Text & ";Data Source=" & SSid & ";"
+        With adoConnection
+            .CursorLocation = adUseClient
+            .ConnectionString = strConnectionString
+        End With
+        On Error GoTo errorhandlerconnopen:
+        adoConnection.Open
+        ErrMsg = False
+        Call Create_Workbook
+        Exit Sub
+errorhandlerconnopen:
+        ErrMsg = True
+        Call ThrowError(Err, SSid, Qualifier, Table)
+        
+    End Sub
+    
+    Public Sub Create_Workbook()
+        
+        Dim wsheet As Excel.Worksheet
+        
+        If FormMain.CmdBaseExtract.Tag = "True" And FormMain.BaseExtract = False Then
+            Set bbook = Workbooks.Add(1)
+            bbook.SaveAs ThisWorkbook.Path & "\" & "Base_Dump.xls"
+        Else
+            If FormMain.CmdCompareExtract.Tag = "True" And FormMain.CompareExtract = False Then
+                Set bbook = Workbooks.Add(1)
+                bbook.SaveAs ThisWorkbook.Path & "\" & "Compare_Dump.xls"
+            End If
+        End If
+        For Each wsheet In bbook.Worksheets
+            If wsheet.Name = "Sheet1" Then
+                If FormMain.CmdBaseExtract.Tag = "True" And FormMain.BaseExtract = False Then
+                    wsheet.Name = FormMain.ComboBase.Value
+                Else
+                    If FormMain.CmdCompareExtract.Tag = "True" And FormMain.CompareExtract = False Then
+                        wsheet.Name = FormMain.ComboCompare.Value
+                    End If
+                End If
+                Exit For
+            End If
+        Next wsheet
+    
+    End Sub
+    
+    Public Sub Connection_Close()
+    
+        If adoConnection.State = adStateOpen Then
+            adoConnection.Close
+        End If
+        Set adoConnection = Nothing
+        On Error GoTo errorhandlerconnopen:
+        Exit Sub
+errorhandlerconnopen:
+        Call ThrowError(Err, SSid, Qualifier, Table)
+        
+    End Sub
+            
+    Private Sub fetchPath1(Table As String, SSid As String, Qualifier As String)
+    
+        Dim i As Long, j As Integer
+        Dim wsheet As Excel.Worksheet
+        
+        ExtractDone = True
+        selectFieldCount = 0
+        rowsPath1 = 0
+        colsPath1 = 0
+        
+        bbook.Activate
+        
+        For Each wsheet In bbook.Worksheets
+            If wsheet.Name = Table Then
+                DeleteSheet (wsheet.Name)
+                Set osheet = wsheet
+                Exit For
+            End If
+        Next wsheet
+             
+        Set adoCommand1 = New ADODB.Command
+        
+        With adoCommand1
+            .CommandType = adCmdText
+            .ActiveConnection = adoConnection
+            .CommandText = "SELECT * FROM " & Qualifier & "." & Table & " WITH UR"
+        End With
+         
+        Set adoRecordSet1 = New ADODB.Recordset
+        'Create record set
+        On Error GoTo errorhandlerpath1:
+        adoRecordSet1.Open adoCommand1, , adOpenForwardOnly, adLockReadOnly
+        
+        i = 0
+
+        If Not adoRecordSet1.EOF Then
+            Set osheet = bbook.Worksheets.Add(After:=Excel.ActiveWorkbook.Worksheets(Excel.ActiveWorkbook.Worksheets.Count))
+            osheet.Name = Table
+        End If
+                
+        If Not adoRecordSet1.EOF Then adoRecordSet1.MoveFirst
+            Do While ((Not adoRecordSet1.EOF) And i < maxRows)
+                For j = 0 To (adoRecordSet1.Fields.Count - 1)
+                    On Error Resume Next
+                    If i = 0 Then
+                        osheet.Cells(i + 1, j + 1).Value = adoRecordSet1.Fields.Item(j).Name
+                        osheet.Cells(i + 2, j + 1).Value = CStr(adoRecordSet1.Fields(j))
+                    Else
+                        osheet.Cells(i + 2, j + 1).Value = CStr(adoRecordSet1.Fields(j))
+                    End If
+                Next j
+                adoRecordSet1.MoveNext
+                i = i + 1
+            Loop
+        
+        colsPath1 = j
+        rowsPath1 = i
+        
+        If rowsPath1 = 0 Then MsgBox "No rows fetched for the given " & Qualifier & "." & Table & " table."
+        
+        adoRecordSet1.Close
+        Call FormatSheets(osheet)
+        bbook.Save
+        Exit Sub
+        
+errorhandlerpath1:
+        ExtractDone = False
+        Call ThrowError(Err, SSid, Qualifier, Table)
+        
+    End Sub
+            
+    Private Sub FormatSheets(w1sheet As Excel.Worksheet)
+    
+        'Formats the Excel Sheets generated
+        Dim wsheet As Worksheet
+        Dim r1, r2 As Range
+        Dim r1count, r1col, r2row, r2count As Long
+        
+        For Each wsheet In Worksheets
+            If wsheet.Name = w1sheet.Name Then
+                wsheet.Activate
+                wsheet.UsedRange.Interior.ColorIndex = ColorIndex
+                wsheet.UsedRange.ColumnWidth = 15
+                wsheet.UsedRange.Cells.HorizontalAlignment = xlLeft
+                wsheet.UsedRange.Borders.LineStyle = xlContinuous
+                Set r1 = wsheet.UsedRange.End(xlToRight)
+                r1col = r1.Column
+                For r1count = 1 To r1col
+                    wsheet.Cells(1, r1count).Interior.ColorIndex = 37
+                    wsheet.Cells(1, r1count).BorderAround ColorIndex:=1, Weight:=xlThick
+                Next r1count
+                wsheet.Rows(1).Font.Bold = True
+                wsheet.Rows(1).WrapText = True
+                wsheet.Rows(1).HorizontalAlignment = xlCenter
+                wsheet.Rows(1).VerticalAlignment = xlCenter
+                Set r1 = Nothing
+                r1col = 0
+                Exit For
+            End If
+        Next wsheet
+        
+    End Sub
+            
+    Public Sub Compare_data()
+        
+        Dim HighValue As Integer
+        Dim wbook1 As Excel.Workbook, wbook2 As Excel.Workbook
+        Dim wsheet1 As Excel.Worksheet, wsheet2 As Excel.Worksheet, rsheet As Excel.Worksheet, tsheet As Excel.Worksheet
+        
+        HighValue = FindCompareValue
+        
+        Set rbook = Workbooks.Add(1)
+        rbook.SaveAs ThisWorkbook.Path & "\" & "Comparison_Result.xls"
+        For Each rsheet In rbook.Worksheets
+            If rsheet.Name = "Sheet1" Then
+                rsheet.Name = FormMain.ComboCompare.Value & " against " & FormMain.ComboBase.Value
+                rsheet.Columns(3).ColumnWidth = 40
+                rsheet.Cells(5, 3).Value = "Data present in " & FormMain.ComboCompare.Value & " but not present in " & FormMain.ComboBase.Value & "."
+                rsheet.Cells(5, 3).Interior.ColorIndex = ColorIndex
+                rsheet.Cells(5, 3).WrapText = True
+                rsheet.Cells(5, 3).Borders.LineStyle = xlContinuous
+                rsheet.Cells(5, 3).Borders.Weight = xlThick
+                rsheet.Cells(5, 3).VerticalAlignment = xlTop
+                rsheet.Cells(5, 3).HorizontalAlignment = xlLeft
+                rsheet.Cells(6, 3).Value = "Data present in " & FormMain.ComboBase.Value & " but not present in " & FormMain.ComboCompare.Value & "."
+                rsheet.Cells(6, 3).Interior.ColorIndex = 22
+                rsheet.Cells(6, 3).WrapText = True
+                rsheet.Cells(6, 3).Borders.LineStyle = xlContinuous
+                rsheet.Cells(6, 3).Borders.Weight = xlThick
+                rsheet.Cells(6, 3).VerticalAlignment = xlTop
+                rsheet.Cells(6, 3).HorizontalAlignment = xlLeft
+                'rsheet.Cells(7, 3).Value = "The cell (Data) in " & FormMain.ComboCompare.Value & " is modified, when compared with data missing in " & FormMain.ComboBase.Value & "."
+                'rsheet.Cells(7, 3).Interior.ColorIndex = 27
+                'rsheet.Cells(7, 3).WrapText = True
+                'rsheet.Cells(7, 3).Borders.LineStyle = xlContinuous
+                'rsheet.Cells(7, 3).Borders.Weight = xlThick
+                'rsheet.Cells(7, 3).VerticalAlignment = xlTop
+                'rsheet.Cells(7, 3).HorizontalAlignment = xlLeft
+                rsheet.Cells(11, 3).Value = "Excluded Tables (if any) and Reason for Exclusion:"
+                rsheet.Cells(11, 3).Interior.ColorIndex = 16
+                rsheet.Cells(11, 3).WrapText = True
+                rsheet.Cells(11, 3).Borders.LineStyle = xlContinuous
+                rsheet.Cells(11, 3).Borders.Weight = xlThick
+                rsheet.Cells(11, 3).VerticalAlignment = xlTop
+                rsheet.Cells(11, 3).HorizontalAlignment = xlLeft
+                Exit For
+            End If
+        Next rsheet
+        
+        Set wbook2 = Workbooks("Compare_Dump.xls")
+        wbook2.Activate
+        For Each wsheet2 In wbook2.Worksheets
+            If wsheet2.Index > 1 Then
+                Application.ScreenUpdating = False
+                Application.StatusBar = "Comparing " & wsheet2.Name
+                Call Compare_sheet(wsheet2, wbook2, wsheet1, wbook1, HighValue)
+                Application.ScreenUpdating = True
+            End If
+        Next wsheet2
+        
+        rbook.Save
+        Application.StatusBar = "Comparison completed."
+        MsgBox "Comparison completed Successfully, Please refer Comparison_Result file for compared results..", vbOKOnly, "Comparison Status"
+        
+    End Sub
+    Private Sub Compare_sheet(wsheet2 As Excel.Worksheet, wbook2 As Excel.Workbook, wsheet1 As Excel.Worksheet, wbook1 As Excel.Workbook, HighValue As Integer)
+        
+        Dim SheetName As String, tempRow As String
+        Dim columnCount1 As Integer, columnCount2 As Integer, CellRef1 As Integer, CellRef2 As Integer, CellRef3 As Integer
+        Dim temp1 As Integer, text1 As String
+        Dim i As Long, j, k As Integer
+        Dim a As Long, b, c, d As Integer
+        Dim x As Long, y As Integer
+        Dim rowsCount1 As Long, rowsCount2 As Long, tempCount As Long, DiffCount1 As Long, DiffCount2 As Long, CellCount As Long
+        Dim Table1 As Variant, Table2 As Variant
+        Dim tempTable1() As Variant, tempTable2() As Variant, TempTableBase As Variant, TempTableCompare As Variant
+        Dim RowBase As Long, RowCompare As Long
+        Dim MatchFlag As Boolean, SetColumnName As Boolean, SetColumnTemp As Boolean
+        Dim range1 As String, range2 As String
+        
+        DiffCount1 = 0
+        DiffCount2 = 0
+        i = 1
+        RowBase = 1
+        RowCompare = 1
+        SetColumnName = False
+        SetColumnTemp = False
+        Table1 = ""
+        Table2 = ""
+        range1 = ""
+        range2 = ""
+        text1 = ""
+        
+        On Error GoTo errorhandlerComparison:
+        Table2 = wsheet2.UsedRange
+        range2 = wsheet2.UsedRange.Address
+        SheetName = wsheet2.Name
+        Set wbook1 = Workbooks("Base_Dump.xls")
+        wbook1.Activate
+        Set wsheet1 = wbook1.Worksheets(SheetName)
+        Table1 = wsheet1.UsedRange
+        range1 = wsheet1.UsedRange.Address
+        
+        rbook.Activate
+        Set rsheet = rbook.Worksheets.Add(After:=Excel.ActiveWorkbook.Worksheets(Excel.ActiveWorkbook.Worksheets.Count))
+        rsheet.Name = wsheet2.Name
+
+        If IsEmpty(Table1) And Not IsEmpty(Table2) Then
+            rsheet.Range(range2) = Table2
+            Call FormatSheets(rsheet)
+            rbook.Save
+        Else
+            If Not IsEmpty(Table1) And Not IsEmpty(Table2) Then
+                ReDim tempTable1(1 To UBound(Table1, 1))
+                ReDim TempTableCompare(1 To UBound(Table2, 1), 1 To UBound(Table2, 2))
+                
+                For rowsCount1 = LBound(Table1, 1) To UBound(Table1, 1)
+                    tempTable1(rowsCount1) = ""
+                    For columnCount1 = LBound(Table1, 2) To UBound(Table1, 2)
+                        tempTable1(rowsCount1) = tempTable1(rowsCount1) & Trim(Table1(rowsCount1, columnCount1))
+                    Next columnCount1
+                Next rowsCount1
+                
+                For rowsCount2 = LBound(Table2, 1) To UBound(Table2, 1)
+                    tempRow = ""
+                    MatchFlag = False
+                    For columnCount2 = LBound(Table2, 2) To UBound(Table2, 2)
+                        tempRow = tempRow & Trim(Table2(rowsCount2, columnCount2))
+                    Next columnCount2
+                    For tempCount = 1 To UBound(tempTable1, 1)
+                        If tempRow = tempTable1(tempCount) Then
+                            MatchFlag = True
+                            Exit For
+                        End If
+                    Next tempCount
+                    If MatchFlag = False Then
+                        DiffCount1 = DiffCount1 + 1
+                        If SetColumnName = False Then
+                            For k = 1 To UBound(Table2, 2)
+                                rsheet.Cells(1, k).Value = Table2(1, k)
+                                TempTableCompare(1, k) = Table2(1, k)
+                            Next k
+                            i = i + 1
+                            SetColumnName = True
+                        End If
+                        For j = 1 To UBound(Table2, 2)
+                            rsheet.Cells(i, j).Value = Table2(rowsCount2, j)
+                            TempTableCompare(i, j) = Table2(rowsCount2, j)
+                        Next j
+                        i = i + 1
+                    End If
+                Next rowsCount2
+                
+                If i > 1 Then
+                    RowCompare = i - 1
+                End If
+                
+                If DiffCount1 > 0 Then
+                    Call FormatSheets(rsheet)
+                    rbook.Save
+                End If
+            End If
+        End If
+        
+        i = 1
+        
+        If IsEmpty(Table2) And Not IsEmpty(Table1) Then
+            rsheet.Range(range1) = Table1
+            temp1 = ColorIndex
+            ColorIndex = 22
+            Call FormatSheets(rsheet)
+            ColorIndex = temp1
+            rbook.Save
+        Else
+            If Not IsEmpty(Table1) And Not IsEmpty(Table2) Then
+                ReDim tempTable2(1 To UBound(Table2, 1))
+                ReDim TempTableBase(1 To UBound(Table1, 1), 1 To UBound(Table1, 2))
+                
+                For rowsCount2 = LBound(Table2, 1) To UBound(Table2, 1)
+                    tempTable2(rowsCount2) = ""
+                    For columnCount2 = LBound(Table2, 2) To UBound(Table2, 2)
+                        tempTable2(rowsCount2) = tempTable2(rowsCount2) & Trim(Table2(rowsCount2, columnCount2))
+                    Next columnCount2
+                Next rowsCount2
+        
+                For rowsCount1 = LBound(Table1, 1) To UBound(Table1, 1)
+                    tempRow = ""
+                    MatchFlag = False
+                    For columnCount1 = LBound(Table1, 2) To UBound(Table1, 2)
+                        tempRow = tempRow & Trim(Table1(rowsCount1, columnCount1))
+                    Next columnCount1
+                    For tempCount = 1 To UBound(tempTable2, 1)
+                        If tempRow = tempTable2(tempCount) Then
+                            MatchFlag = True
+                            Exit For
+                        End If
+                    Next tempCount
+                    If MatchFlag = False Then
+                        DiffCount2 = DiffCount2 + 1
+                        If SetColumnTemp = False Then
+                            For k = 1 To UBound(Table1, 2)
+                                TempTableBase(1, k) = Table1(1, k)
+                            Next k
+                            i = i + 1
+                            SetColumnTemp = True
+                        End If
+                        For j = 1 To UBound(Table1, 2)
+                            TempTableBase(i, j) = Table1(rowsCount1, j)
+                        Next j
+                        i = i + 1
+                    End If
+                Next rowsCount1
+                
+                If i > 1 Then
+                    RowBase = i - 1
+                End If
+            End If
+        End If
+        
+        If Not IsEmpty(Table1) And Not IsEmpty(Table2) Then
+            If DiffCount2 > 0 Then
+                If DiffCount1 = 0 Then
+                    For x = 1 To RowBase
+                        For y = 1 To UBound(TempTableBase, 2)
+                            rsheet.Cells(x, y).Value = TempTableBase(x, y)
+                        Next y
+                    Next x
+                    temp1 = ColorIndex
+                    ColorIndex = 22
+                    Call FormatSheets(rsheet)
+                    ColorIndex = temp1
+                    rbook.Save
+                Else
+                    If maxRows >= (RowBase + RowCompare) Then
+                        If (HighValue = 1) Then
+                            For x = 2 To RowBase
+                                For y = 1 To UBound(TempTableBase, 2)
+                                    rsheet.Cells(x + RowCompare - 1, y).Value = TempTableBase(x, y)
+                                    rsheet.Cells(x + RowCompare - 1, y).Interior.ColorIndex = 22
+                                    rsheet.Cells(x + RowCompare - 1, y).Borders.LineStyle = xlContinuous
+                                    rsheet.Cells(x + RowCompare - 1, y).HorizontalAlignment = xlLeft
+                                Next y
+                            Next x
+                        Else
+                            If HighValue > 1 Then
+                                If (RowCompare > 50) Then
+                                    rbook.Save
+                                    Set rsheet1 = rbook.Worksheets.Add(After:=Excel.ActiveWorkbook.Worksheets(Excel.ActiveWorkbook.Worksheets.Count))
+                                    rsheet1.Name = wsheet2.Name & " (Base)"
+                                    For x = 1 To RowBase
+                                        For y = 1 To UBound(TempTableBase, 2)
+                                            rsheet1.Cells(x, y).Value = TempTableBase(x, y)
+                                        Next y
+                                    Next x
+                                    temp1 = ColorIndex
+                                    ColorIndex = 22
+                                    Call FormatSheets(rsheet1)
+                                    ColorIndex = temp1
+                                    rbook.Save
+                                Else
+                                    For x = 2 To RowBase
+                                        For y = 1 To UBound(TempTableBase, 2)
+                                            rsheet.Cells(x + RowCompare - 1, y).Value = TempTableBase(x, y)
+                                            rsheet.Cells(x + RowCompare - 1, y).Interior.ColorIndex = 22
+                                            rsheet.Cells(x + RowCompare - 1, y).Borders.LineStyle = xlContinuous
+                                            rsheet.Cells(x + RowCompare - 1, y).HorizontalAlignment = xlLeft
+                                        Next y
+                                    Next x
+                                End If
+                            End If
+                        End If
+                    Else
+                        text1 = "Oops..   As per System Configuration, " & Application.Name & " can't handle Memory requirement to compare data from '" & wsheet2.Name & "' table." & vbNewLine & vbNewLine & "The table is omitted for comparison.."
+                        MsgBox text1, vbOKOnly, "Out of Memory Error!"
+                        rbook.Activate
+                        For Each tsheet In rbook.Worksheets
+                            If tsheet.Index = 1 Then
+                                For i = 12 To 111
+                                    If tsheet.Cells(i, 3).Value = "" Then
+                                        tsheet.Cells(i, 3).Value = wsheet2.Name & " table's Comparison sheet is incomplete (without Data miss from Base region and Highlight) due to Insufficient Memory to handle Table Data."
+                                        tsheet.Cells(i, 3).Interior.ColorIndex = 19
+                                        tsheet.Cells(i, 3).WrapText = True
+                                        tsheet.Cells(i, 3).Borders.LineStyle = xlContinuous
+                                        tsheet.Cells(i, 3).VerticalAlignment = xlTop
+                                        tsheet.Cells(i, 3).HorizontalAlignment = xlLeft
+                                        Exit For
+                                    End If
+                                Next i
+                                Exit For
+                            End If
+                        Next tsheet
+                        'Diable this for cause: Call DeleteSheet(wsheet2.Name)
+                        Exit Sub
+                    End If
+                End If
+            End If
+            
+            'If DiffCount1 > 0 And DiffCount2 > 0 Then
+            '    For a = 1 To RowCompare
+            '        For c = 1 To RowBase
+            '            CellCount = 0
+            '            CellRef1 = 0
+            '            CellRef2 = 0
+            '            CellRef3 = 0
+            '            For d = 1 To UBound(TempTableBase, 2)
+            '                If TempTableCompare(a, d) <> TempTableBase(c, d) Then
+            '                    CellCount = CellCount + 1
+            '                    If CellRef1 = 0 Then
+            '                        CellRef1 = d
+            '                    Else
+            '                        If CellRef2 = 0 Then
+            '                            CellRef2 = d
+            '                        Else
+            '                            If CellRef3 = 0 Then
+            '                                CellRef3 = d
+            '                            End If
+            '                        End If
+            '                    End If
+            '                    If CellCount > HighValue Then
+            '                        Exit For
+            '                    End If
+            '                End If
+            '            Next d
+            '            If CellCount = HighValue Then
+            '                If CellRef1 > 0 Then
+            '                    rsheet.Cells(a, CellRef1).Interior.ColorIndex = 27
+            '                End If
+            '                If CellRef2 > 0 Then
+            '                    rsheet.Cells(a, CellRef2).Interior.ColorIndex = 27
+            '                End If
+            '                If CellRef3 > 0 Then
+            '                    rsheet.Cells(a, CellRef3).Interior.ColorIndex = 27
+            '                End If
+            '                Exit For
+            '            End If
+            '        Next c
+            '    Next a
+            'End If
+            
+            If DiffCount1 = 0 And DiffCount2 = 0 Then
+                Application.DisplayAlerts = False
+                rsheet.Delete
+                Application.DisplayAlerts = True
+            End If
+        Else
+            If IsEmpty(Table1) And IsEmpty(Table2) Then
+                Application.DisplayAlerts = False
+                rsheet.Delete
+                Application.DisplayAlerts = True
+            End If
+        End If
+        rbook.Save
+        Exit Sub
+        
+errorhandlerComparison:
+        Call ThrowError(Err, wsheet2.Name, Qualifier, Table)
+        If OtherError = False Then
+            rbook.Activate
+            For Each tsheet In rbook.Worksheets
+                If tsheet.Index = 1 Then
+                    For i = 12 To 111
+                        If tsheet.Cells(i, 3).Value = "" Then
+                            tsheet.Cells(i, 3).Value = ErrText
+                            tsheet.Cells(i, 3).Interior.ColorIndex = 15
+                            tsheet.Cells(i, 3).WrapText = True
+                            tsheet.Cells(i, 3).Borders.LineStyle = xlContinuous
+                            tsheet.Cells(i, 3).VerticalAlignment = xlTop
+                            tsheet.Cells(i, 3).HorizontalAlignment = xlLeft
+                            Exit For
+                        End If
+                    Next i
+                    Exit For
+                End If
+            Next tsheet
+            Call DeleteSheet(wsheet2.Name)
+        End If
+        rbook.Save
+        
+    End Sub
+
+    Public Sub ThrowError(Error1 As ErrObject, ErrSSid As String, ErrQualifier As String, ErrTable As String)
+    
+        Dim msg1 As String
+        Dim i As Integer
+        Dim j1, j2, j3, j4
+        
+        ErrText = ""
+        OtherError = False
+        j1 = Error1.Number
+        j2 = Error1.Description
+        j3 = Error1.Source
+        j4 = UserForms.Count
+        
+        Select Case Error1.Number
+        Case "-2147467259"
+            If ErrTable > "" Then
+                msg1 = "DB2 SubSystem  : " & ErrSSid & vbNewLine & "Qualifier              : " & ErrQualifier & vbNewLine & "Table                   : " & ErrTable & vbNewLine & vbNewLine & "Probable UserID/Password mismatch. Below are some reasons where this error may occur." & vbNewLine & vbNewLine & "1. The User ID and Password are incorrect." & vbNewLine & "2. User does not have the required access to execute the query." & vbNewLine & vbNewLine & "Please correct the above things and rerun the Tool.."
+            Else
+                msg1 = "Probable UserID/Password mismatch. Below are some reasons where this error may occur." & vbNewLine & vbNewLine & "1. The User ID and Password are incorrect." & vbNewLine & "2. User does not have the required access to execute the query." & vbNewLine & vbNewLine & "Please correct the above things and rerun the Tool.."
+            End If
+            MsgBox msg1, vbOKOnly, "Error!"
+            Error1.Clear
+            Err.Clear
+            Application.DisplayAlerts = False
+            Call CloseWorkbooks
+            Application.DisplayAlerts = True
+            Call ExitForms
+        Case "-2147217865"
+            msg1 = "DB2 SubSystem  : " & ErrSSid & vbNewLine & "Qualifier              : " & ErrQualifier & vbNewLine & "Table                   : " & ErrTable & vbNewLine & vbNewLine & "Probable Qualifier/Table mismatch. Below are some reasons where this error may occur." & vbNewLine & vbNewLine & "1. Table name you queried does not exist" & vbNewLine & "2. Subsystem id does not have the Qualifier in your query." & vbNewLine & vbNewLine & "Please correct the above things and rerun the Tool.."
+            MsgBox msg1, vbOKOnly, "Error!"
+            Error1.Clear
+            Err.Clear
+            Application.DisplayAlerts = False
+            Call CloseWorkbooks
+            Application.DisplayAlerts = True
+            Call ExitForms
+        Case "7"
+            msg1 = "Oops..   As per System Configuration, " & Application.Name & " can't handle Memory requirement to compare data from '" & ErrSSid & "' table." & vbNewLine & vbNewLine & "The table is omitted for comparison.."
+            MsgBox msg1, vbOKOnly, Error1.Description & " Error!"
+            ErrText = ErrSSid & " table is excluded for comparison due to Insufficient Memory to handle Table Data."
+            Error1.Clear
+            Err.Clear
+        Case "9"
+            msg1 = "The Worksheet '" & ErrSSid & "' present in Compare Workbook is not found in Base Workbook." & vbNewLine & vbNewLine & "The Worksheet is excluded from comparison.."
+            MsgBox msg1, vbOKOnly, "Table not matched Error!"
+            ErrText = ErrSSid & " table is excluded for comparison as it is not found in Base Workbook."
+            Error1.Clear
+            Err.Clear
+        Case Else
+            msg1 = "As per " & j3 & " : " & j1 & vbNewLine & vbNewLine & j2 & vbNewLine & vbNewLine & "Please correct the above things and rerun the Tool.."
+            MsgBox msg1, vbOKOnly, "Error!"
+            Error1.Clear
+            Err.Clear
+            OtherError = True
+            Application.DisplayAlerts = False
+            Call CloseWorkbooks
+            Application.DisplayAlerts = True
+            Call ExitForms
+        End Select
+        
+    End Sub
+
+    Public Function FetchTable()
+                   
+        Dim temp1(100) As Variant
+        Dim ctr1, ctr2 As Long
+        Dim i, k As Integer
+        Dim dup As Boolean
+        
+        Call AssignSheets
+        ctr1 = lkpSheet.Cells(maxRows, 4).End(xlUp).Row
+        FetchTable = "False"
+        i = 1
+            For ctr2 = 6 To ctr1
+                If Trim(lkpSheet.Cells(ctr2, 4).Value) <> "" Then
+                    dup = False
+                    For k = 1 To i
+                        If Trim(temp1(k)) = Trim(lkpSheet.Cells(ctr2, 4).Value) Then
+                            dup = True
+                            Exit For
+                        End If
+                    Next k
+                    If dup = False Then
+                        temp1(i) = UCase(Trim(lkpSheet.Cells(ctr2, 4).Value))
+                        i = i + 1
+                    End If
+                End If
+                If i = 101 Then
+                    Exit For
+                End If
+            Next ctr2
+        FetchTable = temp1
+        
+    End Function
+
+    Private Function FindCompareValue()
+                    
+        Dim CellValue As Integer
+        Dim ctr1, ctr2 As Long
+
+        Call AssignSheets
+        
+        ctr1 = lkpSheet.Cells(maxRows, 5).End(xlUp).Row
+        CellValue = 0
+            For ctr2 = 6 To ctr1
+                If Trim(lkpSheet.Cells(ctr2, 5).Value) <> "" And IsNumeric(lkpSheet.Cells(ctr2, 5).Value) Then
+                    CellValue = Trim(lkpSheet.Cells(ctr2, 5).Value)
+                    Exit For
+                End If
+            Next ctr2
+        
+        If CellValue <= 0 Then
+           FindCompareValue = 1
+        Else
+          If CellValue > 3 Then
+             FindCompareValue = 3
+          Else
+             FindCompareValue = CellValue
+          End If
+        End If
+        
+    End Function
