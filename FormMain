@@ -1,0 +1,276 @@
+Option Explicit
+Dim ActiveForm As String
+Dim obook As Excel.Workbook
+Dim SavedQueriesSheet As Excel.Worksheet
+Dim lkpSheet As Excel.Worksheet
+Dim ReturnVar1 As Boolean, ReturnVar2 As Boolean
+Dim Region1 As String, Region2 As String
+Dim QueryName As String, Query1 As String, Query2 As String
+
+Public BaseExtract As Boolean, CompareExtract As Boolean, CompareComplete As Boolean
+Public SSid1 As String, SSid2 As String
+Public Qualifier1 As String, Qualifier2 As String
+
+    Private Sub CmdBaseExtract_Click()
+    
+        If ComboBase.Value = ComboCompare.Value And ComboBase.Value <> "Select Region" Then
+            MsgBox "The selected Base and Compare Regions are same. Please choose different Region..", vbOKOnly, "Select Valid Region"
+        Else
+            If CmdBaseExtract.Tag = "True" And BaseExtract = True Then
+                MsgBox "Base Table Data is already Extracted", vbOKOnly, "Base Extract"
+            Else
+                ReturnVar1 = False
+                ReturnVar2 = False
+                Call InputValidate1
+                If ReturnVar1 = True Then
+                    If ComboBase.Value <> "Select Region" Then
+                        Region1 = ComboBase.Value
+                        Call GenSSID1
+                        Call GenQualifier1
+                        If ReturnVar2 = True Then
+                            CmdBaseExtract.Tag = "True"
+                            Unload FormLogin
+                            FormLogin.Caption = ComboBase.Value & " Login"
+                            ActiveForm = "FormLogin"
+                            FormLogin.Show vbModeless
+                        End If
+                    Else
+                        MsgBox "Please Select Valid Region", vbOKOnly, "Invalid Region"
+                    End If
+                End If
+            End If
+        End If
+    
+    End Sub
+    
+    Private Sub CmdCompareData_Click()
+    
+        If CompareComplete = False Then
+            If BaseExtract = True And CompareExtract = True Then
+                MsgBox "Comparison will be started in background process, this might take more than 10 mins depending on the amount of table data being compared..", vbOKOnly, "Comparison Started"
+                Call Module1.Compare_data
+                CompareComplete = True
+            Else
+                If BaseExtract = False Then
+                    MsgBox "Base Region Extract is not completed, Please Extract Base data..", vbOKOnly, "Extract is not done yet!"
+                Else
+                    If CompareExtract = False Then
+                        MsgBox "Compare Region Extract is not completed, Please Extract Compare data..", vbOKOnly, "Extract is not done yet!"
+                    End If
+                End If
+            End If
+        Else
+            MsgBox "Comparison is already completed, Please refer Comparison_Result sheet for results..", vbOKOnly, "Comparison already done!"
+        End If
+        
+    End Sub
+    
+    Private Sub CmdCompareExtract_Click()
+    
+        If ComboBase.Value = ComboCompare.Value And ComboCompare.Value <> "Select Region" Then
+            MsgBox "The selected Base and Compare Regions are same. Please choose different Region..", vbOKOnly, "Select Valid Region"
+        Else
+            If CmdCompareExtract.Tag = "True" And CompareExtract = True Then
+                MsgBox "Compare Table Data is already Extracted", vbOKOnly, "Compare Extract"
+            Else
+                ReturnVar1 = False
+                ReturnVar2 = False
+                Call InputValidate2
+                If ReturnVar1 = True Then
+                    If ComboCompare.Value <> "Select Region" Then
+                        Region2 = ComboCompare.Value
+                        Call GenSSID2
+                        Call GenQualifier2
+                        If ReturnVar2 = True Then
+                            CmdCompareExtract.Tag = "True"
+                            Unload FormLogin
+                            FormLogin.Caption = ComboCompare.Value & " Login"
+                            ActiveForm = "FormLogin"
+                            FormLogin.Show vbModeless
+                        End If
+                    Else
+                        MsgBox "Please Select Valid Region", vbOKOnly, "Invalid Region"
+                    End If
+                End If
+            End If
+        End If
+    
+    End Sub
+    
+    Private Sub CmdExit_Click()
+    
+        Call Module1.ExitForms
+        
+    End Sub
+    
+    Private Sub CmdReset_Click()
+    
+        If MsgBox("All Excel Workbooks (if any) created with this Tool will be closed..", vbOKCancel, "Closing Workbooks!") = vbCancel Then
+            Exit Sub
+        Else
+            Call Module1.CloseWorkbooks
+            Call UserForm_Initialize
+        End If
+    
+    End Sub
+    
+    Private Sub UserForm_Initialize()
+    
+        Dim ctr1, ctr2, ctr3 As Long
+        Dim temp1 As String
+        
+        BaseExtract = False
+        CompareExtract = False
+        CompareComplete = False
+        CmdBaseExtract.Tag = ""
+        CmdCompareExtract.Tag = ""
+        
+        Set obook = ThisWorkbook
+        obook.Activate
+        Set lkpSheet = obook.Worksheets("Lookup Sheet")
+        
+        ComboBase.Enabled = True
+        ComboBase.Value = "Select Region"
+        For ctr1 = 0 To ComboBase.ListCount - 1
+            ComboBase.RemoveItem (0)
+        Next
+        ctr3 = lkpSheet.Cells(maxRows, 1).End(xlUp).Row
+        With ComboBase
+            For ctr2 = 6 To ctr3
+                temp1 = lkpSheet.Cells(ctr2, 1)
+                .AddItem temp1
+            Next
+        End With
+    
+        ComboCompare.Enabled = True
+        ComboCompare.Value = "Select Region"
+        For ctr1 = 0 To ComboCompare.ListCount - 1
+            ComboCompare.RemoveItem (0)
+        Next
+        ctr3 = lkpSheet.Cells(maxRows, 1).End(xlUp).Row
+        With ComboCompare
+            For ctr2 = 6 To ctr3
+                temp1 = lkpSheet.Cells(ctr2, 1)
+                .AddItem temp1
+            Next
+        End With
+                
+        'ComboCompare.SetFocus
+        ComboBase.SetFocus
+    
+    End Sub
+    
+    Private Sub InputValidate1()
+    
+        Dim flag1 As Boolean
+    
+        flag1 = True
+            
+        If ComboBase.Value = "Select Region" And flag1 = True Then
+            MsgBox "Please choose Base Region", vbOKOnly, "Base Region"
+            flag1 = False
+        End If
+        
+        If flag1 = True Then
+            ReturnVar1 = True
+        End If
+    
+    End Sub
+    
+    Private Sub InputValidate2()
+    
+        Dim flag1 As Boolean
+        
+        flag1 = True
+        
+        If ComboCompare.Value = "Select Region" And flag1 = True Then
+            MsgBox "Please choose Compare Region", vbOKOnly, "Compare Region"
+            flag1 = False
+        End If
+    
+        If flag1 = True Then
+        ReturnVar1 = True
+        End If
+    
+    End Sub
+    
+    Private Sub GenSSID1()
+    
+        Dim temp1 As String
+        Dim errflag As Boolean
+        
+        errflag = False
+            
+        temp1 = Module1.FindSSid(Region1)
+        If temp1 <> "False" Then
+            SSid1 = temp1
+        Else
+            errflag = True
+        End If
+        temp1 = ""
+    
+        If errflag <> True Then ReturnVar2 = True
+        If errflag = True Then MsgBox "Error finding SSID for DB2 connection, Please check the Lookup Sheet or Contact Support", vbOKOnly, "Error finding SSID"
+    
+    End Sub
+    
+    Private Sub GenQualifier1()
+    
+        Dim temp1 As String
+        Dim errflag As Boolean
+        
+        errflag = False
+    
+        temp1 = Module1.FindQualifier(Region1)
+        If temp1 <> "False" Then
+            Qualifier1 = temp1
+        Else
+            errflag = True
+        End If
+        temp1 = ""
+            
+        If errflag <> True Then ReturnVar2 = True
+        If errflag = True Then MsgBox "Error finding qualifier for DB2 connection, Please check the Lookup Sheet or Contact Support", vbOKOnly, "Error finding qualifier"
+    
+    End Sub
+    
+    Private Sub GenSSID2()
+    
+        Dim temp1 As String
+        Dim errflag As Boolean
+        
+        errflag = False
+            
+        temp1 = Module1.FindSSid(Region2)
+        If temp1 <> "False" Then
+            SSid2 = temp1
+        Else
+            errflag = True
+        End If
+        temp1 = ""
+    
+        If errflag <> True Then ReturnVar2 = True
+        If errflag = True Then MsgBox "Error finding SSID for DB2 connection, Please check the Lookup Sheet or Contact Support", vbOKOnly, "Error finding SSID"
+    
+    End Sub
+    
+    Private Sub GenQualifier2()
+    
+        Dim temp1 As String
+        Dim errflag As Boolean
+        
+        errflag = False
+    
+        temp1 = Module1.FindQualifier(Region2)
+        If temp1 <> "False" Then
+            Qualifier2 = temp1
+        Else
+            errflag = True
+        End If
+        temp1 = ""
+            
+        If errflag <> True Then ReturnVar2 = True
+        If errflag = True Then MsgBox "Error finding qualifier for DB2 connection, Please check the Lookup Sheet or Contact Support", vbOKOnly, "Error finding qualifier"
+    
+    End Sub
+
