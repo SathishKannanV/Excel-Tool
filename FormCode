@@ -1,0 +1,149 @@
+Option Explicit
+Dim ActiveForm As String
+Dim SSid1 As String, SSid2 As String
+Dim Qualifier1 As String, Qualifier2 As String
+Dim ReturnVar As Boolean
+
+    Private Sub CmdLogin_Click()
+    
+        Dim TableList(100) As String, TableCounter As Integer
+        Dim temp1 As Variant
+        Dim i As Integer
+        
+        ReturnVar = False
+        Call Validateformlogin
+        If ReturnVar = True Then
+            If FormMain.CmdBaseExtract.Tag = "True" And FormMain.BaseExtract = False Then
+                Call Module1.Connection_Open(SSid1)
+            Else
+                If FormMain.CmdCompareExtract.Tag = "True" And FormMain.CompareExtract = False Then
+                    Call Module1.Connection_Open(SSid2)
+                End If
+            End If
+            If ErrMsg = False Then
+                MsgBox "Login Successful, Extraction Process will take around 5 mins depending on the amount of Table data being retrieved..", vbOKOnly, "Successful, Extracting.."
+                temp1 = Module1.FetchTable()
+                For i = 1 To UBound(temp1, 1)
+                    If temp1(i) = "" Then
+                        TableCounter = i - 1
+                        Exit For
+                    End If
+                Next i
+                
+                For i = 1 To TableCounter
+                    TableList(i) = temp1(i)
+                    If FormMain.CmdBaseExtract.Tag = "True" And FormMain.BaseExtract = False Then
+                        Call Module1.RunExtractQuery(TableList(i), SSid1, Qualifier1)
+                    Else
+                       If FormMain.CmdCompareExtract.Tag = "True" And FormMain.CompareExtract = False Then
+                            Call Module1.RunExtractQuery(TableList(i), SSid2, Qualifier2)
+                       End If
+                    End If
+                Next i
+                
+                If ExtractDone = True And (TableCounter = i - 1) Then
+                    If FormMain.CmdBaseExtract.Tag = "True" And FormMain.BaseExtract = False Then
+                        Application.StatusBar = "Base Extract Completed."
+                        MsgBox "Base (" & FormMain.ComboBase.Value & ") Table Extract is Complete", vbOKOnly, "Base Extract Complete!"
+                        FormMain.BaseExtract = True
+                    Else
+                        If FormMain.CmdCompareExtract.Tag = "True" And FormMain.CompareExtract = False Then
+                            Application.StatusBar = "Compare Extract Completed."
+                            MsgBox "Compare (" & FormMain.ComboCompare.Value & ") Table Extract is Complete", vbOKOnly, "Compare Extract Complete!"
+                            FormMain.CompareExtract = True
+                        End If
+                    End If
+                End If
+            
+                Call Module1.Connection_Close
+                FormLogin.Hide
+                ActiveForm = "FormMain"
+                FormMain.Show vbModeless
+            End If
+        End If
+    
+    End Sub
+    
+    Private Sub CmdLoginExit_Click()
+    
+        Call Module1.ExitLogin
+        FormLogin.Hide
+        ActiveForm = "FormMain"
+        FormMain.Show vbModeless
+        
+    End Sub
+
+    Private Sub UserForm_Initialize()
+    
+        TxtUserID.Value = ""
+        TxtUserPassword.Value = ""
+     
+        SSid1 = FormMain.SSid1
+        SSid2 = FormMain.SSid2
+        
+        Qualifier1 = FormMain.Qualifier1
+        Qualifier2 = FormMain.Qualifier2
+        
+        TxtUserID.SetFocus
+        'TxtUserPassword.SetFocus
+        
+    End Sub
+    
+    Private Sub Validateformlogin()
+    
+        Dim f1, f2, flag1 As Boolean
+        Dim msg1 As String
+        
+        flag1 = False
+        f1 = True
+        f2 = True
+        msg1 = ""
+        
+        If TxtUserID.Value = "" Then
+            msg1 = "Enter UserId"
+            TxtUserID.SetFocus
+            f1 = False
+        End If
+        
+    '    If txtLoginuid.Value <> "" Then
+    '        If StrConv(Left(txtLoginuid.Value, 1), vbUpperCase) <> "N" And StrConv(Left(txtLoginuid.Value, 1), vbUpperCase) <> "A" Then
+    '        msg1 = "Incorrect UserID"
+    '        f4 = False
+    '        End If
+    '        If Len(txtLoginuid.Value) <> 7 Then
+    '        msg1 = "Incorrect UserID"
+    '        f4 = False
+    '        End If
+    '        If IsNumeric(Mid(txtLoginuid.Value, 2, 6)) = False Then
+    '        msg1 = "Incorrect UserID"
+    '        f4 = False
+    '        End If
+    '        If f4 = False Then
+    '                f1 = False
+    '        End If
+    '    End If
+    
+        
+        If TxtUserPassword.Value = "" Then
+            If msg1 = "" Then
+                msg1 = "Enter Password"
+                TxtUserPassword.SetFocus
+            Else
+                msg1 = msg1 & " and Password"
+            End If
+            f2 = False
+        End If
+        
+        If f1 = True And f2 = True Then
+            flag1 = True
+        End If
+        
+        If flag1 = False Then
+            MsgBox msg1, vbOKOnly, "Login Form Error"
+        End If
+    
+        ReturnVar = flag1
+        msg1 = ""
+        
+    End Sub
+
