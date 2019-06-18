@@ -1,0 +1,227 @@
+
+Option Explicit
+
+Dim ActiveForm As String
+Dim obook As Excel.Workbook
+Dim lkpSheet As Excel.Worksheet
+
+    Private Sub ChkBoxFirst_Click()
+    
+        Dim i As Integer
+        
+        If ChkBoxFirst.Value = True Then
+            For i = 0 To ListBoxFirst.ListCount - 1
+                ListBoxFirst.Selected(i) = True
+            Next i
+        End If
+        
+        If ChkBoxFirst.Value = False Then
+            For i = 0 To ListBoxFirst.ListCount - 1
+                ListBoxFirst.Selected(i) = False
+            Next i
+        End If
+    
+    End Sub
+
+Private Sub ChkBoxHilite_Click()
+
+    If ChkBoxHilite.Value = True Then
+        LblHilite.Visible = True
+        ComboHilite.Visible = True
+    Else
+        LblHilite.Visible = False
+        ComboHilite.Visible = False
+    End If
+
+End Sub
+
+Private Sub ChkBoxSecond_Click()
+
+        Dim i As Integer
+        
+        If ChkBoxSecond.Value = True Then
+            For i = 0 To ListBoxSecond.ListCount - 1
+                ListBoxSecond.Selected(i) = True
+            Next i
+        End If
+        
+        If ChkBoxSecond.Value = False Then
+            For i = 0 To ListBoxSecond.ListCount - 1
+                ListBoxSecond.Selected(i) = False
+            Next i
+        End If
+        
+End Sub
+
+    Private Sub CmdButtonAdd_Click()
+        
+        Dim i, j As Integer
+        Dim counter As Integer
+        
+        counter = 0
+        
+        For i = 0 To ListBoxFirst.ListCount - 1
+            If ListBoxFirst.Selected(i - counter) = True Then
+                ListBoxSecond.AddItem ListBoxFirst.List(i - counter)
+                ListBoxFirst.RemoveItem (i - counter)
+                counter = counter + 1
+            End If
+        Next i
+        
+        If ListBoxSecond.ListCount > 0 Then
+            LblSecond.Enabled = True
+            ListBoxSecond.Enabled = True
+            CmdButtonRemove.Enabled = True
+            ChkBoxSecond.Enabled = True
+        End If
+                
+        If ListBoxFirst.ListCount = 0 Then
+            ChkBoxFirst.Value = False
+            LblFirst.Enabled = False
+            ListBoxFirst.Enabled = False
+            CmdButtonAdd.Enabled = False
+            ChkBoxFirst.Enabled = False
+            ListBoxSecond.SetFocus
+        End If
+
+    End Sub
+
+    Private Sub CmdButtonNext_Click()
+    
+        Dim ctr1, ctr2, ctr3 As Long
+        Dim i As Integer
+        
+        If (ListBoxSecond.ListCount > 0) And (ChkBoxHilite.Value = False Or (ChkBoxHilite.Value = True And ComboHilite.Value > "")) Then
+            Set obook = ThisWorkbook
+            obook.Activate
+            Set lkpSheet = obook.Worksheets("Lookup Sheet")
+            
+            ctr3 = lkpSheet.Cells(maxRows, 4).End(xlUp).Row
+            For ctr2 = 6 To ctr3
+                lkpSheet.Cells(ctr2, 4).Value = ""
+            Next ctr2
+            
+            ctr3 = lkpSheet.Cells(maxRows, 5).End(xlUp).Row
+            For ctr2 = 6 To ctr3
+                lkpSheet.Cells(ctr2, 5).Value = ""
+            Next ctr2
+
+            ctr1 = 6
+            For i = 0 To ListBoxSecond.ListCount - 1
+                lkpSheet.Cells(ctr1, 4).Value = ListBoxSecond.List(i)
+                ctr1 = ctr1 + 1
+            Next i
+            
+            If (ChkBoxHilite.Value = True And ComboHilite.Value > "") Then
+                ctr1 = 6
+                lkpSheet.Cells(ctr1, 5).Value = ComboHilite.Value
+            End If
+                
+            FormInitial.Hide
+            Unload FormMain
+            ActiveForm = "FormMain"
+            FormMain.Show vbModeless
+        Else
+            If ListBoxSecond.ListCount = 0 Then
+                MsgBox "Please select atleast one table to Start with the Tool..", vbOKOnly, "Table not selected yet!"
+            Else
+                If (ListBoxSecond.ListCount > 0) And (ChkBoxHilite.Value = True And ComboHilite.Value = "") Then
+                   MsgBox "Highlight option was selected without valid Highlight cell value." & vbNewLine & vbNewLine & "Please Select valid Highlight value or else uncheck the Highlight option.", vbOKOnly, "Highlight value Missing!"
+                End If
+            End If
+        End If
+                            
+    End Sub
+
+Private Sub CmdButtonRemove_Click()
+
+        Dim i, j As Integer
+        Dim counter As Integer
+        
+        counter = 0
+        
+        For i = 0 To ListBoxSecond.ListCount - 1
+            If ListBoxSecond.Selected(i - counter) = True Then
+                ListBoxFirst.AddItem ListBoxSecond.List(i - counter)
+                ListBoxSecond.RemoveItem (i - counter)
+                counter = counter + 1
+            End If
+        Next i
+                
+        If ListBoxSecond.ListCount = 0 Then
+            ChkBoxSecond.Value = False
+            LblSecond.Enabled = False
+            ListBoxSecond.Enabled = False
+            CmdButtonRemove.Enabled = False
+            ChkBoxSecond.Enabled = False
+        End If
+        
+        If ListBoxFirst.ListCount > 0 Then
+            LblFirst.Enabled = True
+            ListBoxFirst.Enabled = True
+            CmdButtonAdd.Enabled = True
+            ChkBoxFirst.Enabled = True
+            ListBoxFirst.SetFocus
+        End If
+        
+End Sub
+
+    Private Sub CmdButtonResetPreq_Click()
+    
+        Call UserForm_Initialize
+    
+    End Sub
+
+    Private Sub UserForm_Initialize()
+    
+        Dim ctr1, ctr2, ctr3 As Long
+        Dim temp1 As String
+
+        ListBoxFirst.Clear
+        ListBoxSecond.Clear
+        ComboHilite.Clear
+        ChkBoxFirst.Value = False
+        ChkBoxSecond.Value = False
+        
+        LblFirst.Enabled = True
+        ListBoxFirst.Enabled = True
+        CmdButtonAdd.Enabled = True
+        ChkBoxFirst.Enabled = True
+        
+        LblSecond.Enabled = False
+        ListBoxSecond.Enabled = False
+        CmdButtonRemove.Enabled = False
+        ChkBoxSecond.Enabled = False
+        
+        LblHilite.Visible = False
+        ComboHilite.Visible = False
+        ChkBoxHilite.Value = False
+        
+        Set obook = ThisWorkbook
+        obook.Activate
+        Set lkpSheet = obook.Worksheets("Lookup Sheet")
+        
+        ListBoxFirst.Enabled = True
+        For ctr1 = 0 To ListBoxFirst.ListCount - 1
+            ListBoxFirst.RemoveItem (ctr1)
+        Next
+        ctr3 = lkpSheet.Cells(maxRows, 12).End(xlUp).Row
+        With ListBoxFirst
+            For ctr2 = 6 To ctr3
+                If lkpSheet.Cells(ctr2, 12).Value <> "" Then
+                    temp1 = Trim(lkpSheet.Cells(ctr2, 12).Value)
+                    .AddItem temp1
+                End If
+            Next ctr2
+        End With
+        
+        ComboHilite.Value = ""
+        With ComboHilite
+            .AddItem "1"
+            .AddItem "2"
+            .AddItem "3"
+        End With
+        
+        ListBoxFirst.SetFocus
+
+    End Sub
